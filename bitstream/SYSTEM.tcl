@@ -20,12 +20,18 @@ set script_folder [_tcl::get_script_folder]
 ################################################################
 # Check if script is running in correct Vivado version.
 ################################################################
-set scripts_vivado_version 2023.1
+set scripts_vivado_version 2023.2
 set current_vivado_version [version -short]
 
 if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
    puts ""
-   catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
+   if { [string compare $scripts_vivado_version $current_vivado_version] > 0 } {
+      catch {common::send_gid_msg -ssname BD::TCL -id 2042 -severity "ERROR" " This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Sourcing the script failed since it was created with a future version of Vivado."}
+
+   } else {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
+
+   }
 
    return 1
 }
@@ -127,7 +133,6 @@ if { $bCheckIPs == 1 } {
 xilinx.com:ip:processing_system7:5.5\
 xilinx.com:ip:axi_dma:7.1\
 xilinx.com:ip:proc_sys_reset:5.0\
-xilinx.com:ip:system_ila:1.1\
 xilinx.com:user:SYSTEM:1.0\
 "
 
@@ -498,6 +503,7 @@ proc create_root_design { parentCell } {
     CONFIG.c_include_sg {0} \
     CONFIG.c_m_axi_mm2s_data_width {64} \
     CONFIG.c_m_axis_mm2s_tdata_width {64} \
+    CONFIG.c_mm2s_burst_size {8} \
     CONFIG.c_sg_length_width {26} \
   ] $PRE_SYN_DMA
 
@@ -518,6 +524,7 @@ proc create_root_design { parentCell } {
     CONFIG.c_include_sg {0} \
     CONFIG.c_m_axi_mm2s_data_width {64} \
     CONFIG.c_m_axis_mm2s_tdata_width {64} \
+    CONFIG.c_mm2s_burst_size {8} \
     CONFIG.c_sg_length_width {26} \
   ] $SPIKE_DMA
 
@@ -549,33 +556,6 @@ proc create_root_design { parentCell } {
   set_property CONFIG.NUM_MI {1} $axi_interconnect_2
 
 
-  # Create instance: system_ila_0, and set properties
-  set system_ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 system_ila_0 ]
-  set_property -dict [list \
-    CONFIG.C_ADV_TRIGGER {true} \
-    CONFIG.C_EN_STRG_QUAL {1} \
-    CONFIG.C_MON_TYPE {INTERFACE} \
-    CONFIG.C_NUM_MONITOR_SLOTS {2} \
-    CONFIG.C_SLOT_0_APC_EN {0} \
-    CONFIG.C_SLOT_0_AXI_AR_SEL_DATA {1} \
-    CONFIG.C_SLOT_0_AXI_AR_SEL_TRIG {1} \
-    CONFIG.C_SLOT_0_AXI_AW_SEL_DATA {1} \
-    CONFIG.C_SLOT_0_AXI_AW_SEL_TRIG {1} \
-    CONFIG.C_SLOT_0_AXI_B_SEL_DATA {1} \
-    CONFIG.C_SLOT_0_AXI_B_SEL_TRIG {1} \
-    CONFIG.C_SLOT_0_AXI_R_SEL_DATA {1} \
-    CONFIG.C_SLOT_0_AXI_R_SEL_TRIG {1} \
-    CONFIG.C_SLOT_0_AXI_W_SEL_DATA {1} \
-    CONFIG.C_SLOT_0_AXI_W_SEL_TRIG {1} \
-    CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-    CONFIG.C_SLOT_0_TYPE {0} \
-    CONFIG.C_SLOT_1_APC_EN {0} \
-    CONFIG.C_SLOT_1_AXI_DATA_SEL {1} \
-    CONFIG.C_SLOT_1_AXI_TRIG_SEL {1} \
-    CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-  ] $system_ila_0
-
-
   # Create instance: SYSTEM_0, and set properties
   set SYSTEM_0 [ create_bd_cell -type ip -vlnv xilinx.com:user:SYSTEM:1.0 SYSTEM_0 ]
 
@@ -585,11 +565,7 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net SPIKE_DMA_M_AXIS_MM2S [get_bd_intf_pins SPIKE_DMA/M_AXIS_MM2S] [get_bd_intf_pins SYSTEM_0/SPIKE_STREAM]
   connect_bd_intf_net -intf_net SPIKE_DMA_M_AXI_MM2S [get_bd_intf_pins SPIKE_DMA/M_AXI_MM2S] [get_bd_intf_pins axi_interconnect_0/S00_AXI]
   connect_bd_intf_net -intf_net SYSTEM_0_POST_SYNAPTIC_STREAM [get_bd_intf_pins SYSTEM_0/POST_SYNAPTIC_STREAM] [get_bd_intf_pins POST_SYN_DMA/S_AXIS_S2MM]
-connect_bd_intf_net -intf_net [get_bd_intf_nets SYSTEM_0_POST_SYNAPTIC_STREAM] [get_bd_intf_pins SYSTEM_0/POST_SYNAPTIC_STREAM] [get_bd_intf_pins system_ila_0/SLOT_0_AXIS]
-  set_property HDL_ATTRIBUTE.DEBUG {true} [get_bd_intf_nets SYSTEM_0_POST_SYNAPTIC_STREAM]
   connect_bd_intf_net -intf_net axi_dma_0_M_AXIS_MM2S [get_bd_intf_pins PRE_SYN_DMA/M_AXIS_MM2S] [get_bd_intf_pins SYSTEM_0/PRE_SYNAPTIC_STREAM]
-connect_bd_intf_net -intf_net [get_bd_intf_nets axi_dma_0_M_AXIS_MM2S] [get_bd_intf_pins PRE_SYN_DMA/M_AXIS_MM2S] [get_bd_intf_pins system_ila_0/SLOT_1_AXIS]
-  set_property HDL_ATTRIBUTE.DEBUG {true} [get_bd_intf_nets axi_dma_0_M_AXIS_MM2S]
   connect_bd_intf_net -intf_net axi_interconnect_0_M00_AXI [get_bd_intf_pins axi_interconnect_0/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP1]
   connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins axi_interconnect_1/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP2]
   connect_bd_intf_net -intf_net axi_interconnect_2_M00_AXI [get_bd_intf_pins axi_interconnect_2/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
@@ -602,9 +578,9 @@ connect_bd_intf_net -intf_net [get_bd_intf_nets axi_dma_0_M_AXIS_MM2S] [get_bd_i
   connect_bd_intf_net -intf_net ps7_0_axi_periph_M03_AXI [get_bd_intf_pins ps7_0_axi_periph/M03_AXI] [get_bd_intf_pins POST_SYN_DMA/S_AXI_LITE]
 
   # Create port connections
-  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins ps7_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps7_0_125M/slowest_sync_clk] [get_bd_pins PRE_SYN_DMA/s_axi_lite_aclk] [get_bd_pins ps7_0_axi_periph/M00_ACLK] [get_bd_pins ps7_0_axi_periph/ACLK] [get_bd_pins ps7_0_axi_periph/M01_ACLK] [get_bd_pins PRE_SYN_DMA/m_axi_mm2s_aclk] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP1_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP2_ACLK] [get_bd_pins SPIKE_DMA/s_axi_lite_aclk] [get_bd_pins ps7_0_axi_periph/M02_ACLK] [get_bd_pins SPIKE_DMA/m_axi_mm2s_aclk] [get_bd_pins POST_SYN_DMA/m_axi_s2mm_aclk] [get_bd_pins POST_SYN_DMA/s_axi_lite_aclk] [get_bd_pins ps7_0_axi_periph/M03_ACLK] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/M00_ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins system_ila_0/clk] [get_bd_pins SYSTEM_0/SYSTEM_CLK] [get_bd_pins SYSTEM_0/system_interface_aclk] [get_bd_pins SYSTEM_0/pre_synaptic_stream_aclk] [get_bd_pins SYSTEM_0/spike_stream_aclk] [get_bd_pins SYSTEM_0/post_synaptic_stream_aclk]
+  connect_bd_net -net processing_system7_0_FCLK_CLK0 [get_bd_pins processing_system7_0/FCLK_CLK0] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP1_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP2_ACLK] [get_bd_pins SPIKE_DMA/s_axi_lite_aclk] [get_bd_pins SPIKE_DMA/m_axi_mm2s_aclk] [get_bd_pins POST_SYN_DMA/s_axi_lite_aclk] [get_bd_pins POST_SYN_DMA/m_axi_s2mm_aclk] [get_bd_pins PRE_SYN_DMA/s_axi_lite_aclk] [get_bd_pins PRE_SYN_DMA/m_axi_mm2s_aclk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_2/ACLK] [get_bd_pins axi_interconnect_2/S00_ACLK] [get_bd_pins axi_interconnect_2/M00_ACLK] [get_bd_pins ps7_0_axi_periph/ACLK] [get_bd_pins ps7_0_axi_periph/S00_ACLK] [get_bd_pins ps7_0_axi_periph/M00_ACLK] [get_bd_pins ps7_0_axi_periph/M01_ACLK] [get_bd_pins ps7_0_axi_periph/M02_ACLK] [get_bd_pins ps7_0_axi_periph/M03_ACLK] [get_bd_pins rst_ps7_0_125M/slowest_sync_clk] [get_bd_pins SYSTEM_0/SYSTEM_CLK] [get_bd_pins SYSTEM_0/system_interface_aclk] [get_bd_pins SYSTEM_0/pre_synaptic_stream_aclk] [get_bd_pins SYSTEM_0/spike_stream_aclk] [get_bd_pins SYSTEM_0/post_synaptic_stream_aclk]
   connect_bd_net -net processing_system7_0_FCLK_RESET0_N [get_bd_pins processing_system7_0/FCLK_RESET0_N] [get_bd_pins rst_ps7_0_125M/ext_reset_in]
-  connect_bd_net -net rst_ps7_0_125M_peripheral_aresetn [get_bd_pins rst_ps7_0_125M/peripheral_aresetn] [get_bd_pins ps7_0_axi_periph/S00_ARESETN] [get_bd_pins PRE_SYN_DMA/axi_resetn] [get_bd_pins ps7_0_axi_periph/M00_ARESETN] [get_bd_pins ps7_0_axi_periph/ARESETN] [get_bd_pins ps7_0_axi_periph/M01_ARESETN] [get_bd_pins SPIKE_DMA/axi_resetn] [get_bd_pins ps7_0_axi_periph/M02_ARESETN] [get_bd_pins POST_SYN_DMA/axi_resetn] [get_bd_pins ps7_0_axi_periph/M03_ARESETN] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_2/ARESETN] [get_bd_pins axi_interconnect_2/M00_ARESETN] [get_bd_pins axi_interconnect_2/S00_ARESETN] [get_bd_pins system_ila_0/resetn] [get_bd_pins SYSTEM_0/system_interface_aresetn] [get_bd_pins SYSTEM_0/pre_synaptic_stream_aresetn] [get_bd_pins SYSTEM_0/spike_stream_aresetn] [get_bd_pins SYSTEM_0/post_synaptic_stream_aresetn]
+  connect_bd_net -net rst_ps7_0_125M_peripheral_aresetn [get_bd_pins rst_ps7_0_125M/peripheral_aresetn] [get_bd_pins SPIKE_DMA/axi_resetn] [get_bd_pins POST_SYN_DMA/axi_resetn] [get_bd_pins PRE_SYN_DMA/axi_resetn] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_2/ARESETN] [get_bd_pins axi_interconnect_2/S00_ARESETN] [get_bd_pins axi_interconnect_2/M00_ARESETN] [get_bd_pins ps7_0_axi_periph/ARESETN] [get_bd_pins ps7_0_axi_periph/S00_ARESETN] [get_bd_pins ps7_0_axi_periph/M00_ARESETN] [get_bd_pins ps7_0_axi_periph/M01_ARESETN] [get_bd_pins ps7_0_axi_periph/M02_ARESETN] [get_bd_pins ps7_0_axi_periph/M03_ARESETN] [get_bd_pins SYSTEM_0/system_interface_aresetn] [get_bd_pins SYSTEM_0/pre_synaptic_stream_aresetn] [get_bd_pins SYSTEM_0/spike_stream_aresetn] [get_bd_pins SYSTEM_0/post_synaptic_stream_aresetn]
 
   # Create address segments
   assign_bd_address -offset 0x40400000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs POST_SYN_DMA/S_AXI_LITE/Reg] -force
